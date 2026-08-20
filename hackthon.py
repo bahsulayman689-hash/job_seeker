@@ -24,13 +24,28 @@ try:
 except ImportError:
     HAS_TRANSFORMERS = False
 
+# Layout and structural setup
 st.set_page_config(page_title="AI Match Bridge", page_icon="🧠", layout="centered")
 
-st.title("🧠 AI Seeker-to-Giver Match Engine")
-st.write("The AI evaluates your input directly against the employer's target profiles.")
+# --- 🚀 THE LOGO & SIDEBAR NAVIGATION LAYER ---
+# Anchoring a high-resolution logo to the top left of the main workspace and sidebar tracking frame
 st.logo("https://streamlit.io/images/brand/streamlit-mark-color.png")
 
-# --- THE GIVER CRITERIA (5 DISTINCT JOB LISTINGS) ---
+with st.sidebar:
+    st.markdown("### 🏢 Giver Profile Repository")
+    st.caption("Settings configured by the employer sector.")
+    
+    # Global benchmark adjustment node
+    STRICT_THRESHOLD = st.slider("Strict Match Threshold (%)", min_value=40, max_value=90, value=70, step=5)
+    st.write("---")
+    
+    # Clean system hardware dependency readouts
+    with st.expander("⚙️ System Core Health"):
+        st.write(f"PyPDF2 Parsers: {'🟢 Active' if HAS_PDF else '🔴 Missing'}")
+        st.write(f"gTTS Audio Vocalizers: {'🟢 Active' if HAS_GTTS else '🔴 Missing'}")
+        st.write(f"Sentence Embedders: {'🟢 Active' if HAS_TRANSFORMERS else '🔴 Missing'}")
+
+# --- THE GIVER CRITERIA DATABASE ---
 GIVER_JOBS = [
     {
         "id": 1, 
@@ -59,25 +74,24 @@ GIVER_JOBS = [
     }
 ]
 
-# Set the strict mathematical threshold for matching acceptance
-STRICT_THRESHOLD = 70
+st.title("🧠 AI Seeker-to-Giver Match Engine")
+st.write("The AI evaluates your input directly against the employer's target profiles.")
 
 # --- THE SEEKER SELECTION FRAME ---
 st.subheader("🧑‍🎓 Candidate Evaluation Pipeline")
 
-# Dynamically generate the dropdown list from our expanded database
+# Dynamically pull listings from our structural criteria index
 job_titles = [job["title"] for job in GIVER_JOBS]
 target_position = st.selectbox("Select the job position you are targeting:", job_titles)
 
-# Find and isolate the exact active keywords for the selected job position
 selected_job = next(item for item in GIVER_JOBS if item["title"] == target_position)
 
-# Choose input type: File or Voice
+# User input protocol toggle
 input_method = st.radio("How would you like to submit your experience profile?", ["📄 Upload PDF Resume", "🎙️ Record Voice Profile"])
 
 extracted_text = ""
 
-# Option 1: PDF Document Upload
+# Mode A: PDF Content Processing
 if input_method == "📄 Upload PDF Resume":
     uploaded_file = st.file_uploader("Upload your resume file (PDF format)", type=["pdf"])
     if uploaded_file is not None:
@@ -93,13 +107,13 @@ if input_method == "📄 Upload PDF Resume":
             extracted_text = "Placeholder sample background text."
             st.warning("Running sandbox text profile match.")
 
-# Option 2: Voice Input Profile
+# Mode B: High-fidelity Spoken Recording
 elif input_method == "🎙️ Record Voice Profile":
     seeker_audio = st.audio_input("Click record and describe your skills and tools out loud")
     if seeker_audio is not None:
         st.audio(seeker_audio, format="audio/wav")
         
-        # Smart dynamic mock speech-to-text response based on user selection
+        # Predictive placeholder routing matching chosen target categories
         if target_position == "Python Automation Specialist":
             extracted_text = "I build simple automated bots using python and manage backend database entries."
         elif target_position == "Social Media Content Creator":
@@ -122,17 +136,16 @@ if extracted_text:
         with st.spinner("AI is calculating vector embeddings..."):
             model = load_model()
             
-            # Vectorize both profiles to find alignment
+            # Tensor processing array setup
             job_vector = model.encode(selected_job["keywords"], convert_to_tensor=True)
             seeker_vector = model.encode(extracted_text, convert_to_tensor=True)
             
-            # Compute similarity score 
             similarity = util.cos_sim(seeker_vector, job_vector).item()
-            match_score = int(max(10, min(similarity * 100 + 40, 99))) # Normalized demo curve
+            match_score = int(max(10, min(similarity * 100 + 40, 99)))
             
             st.metric(label=f"Alignment Score for: {target_position}", value=f"{match_score}%")
             
-            # 📊 ACCEPTED OR REJECTED DECISION MATRIX WITH ALTERNATIVE ENGINE
+            # Outcome evaluation router logic
             if match_score >= STRICT_THRESHOLD:
                 st.balloons()
                 st.success(f"✅ **STATUS: ACCEPTED**\n\nYour profile matches the Giver's requirements perfectly. You have been passed through the bridge to the next hiring stage.")
@@ -146,12 +159,11 @@ if extracted_text:
             else:
                 st.error(f"❌ **STATUS: REJECTED**\n\nYour profile score ({match_score}%) fell below the required hiring benchmark ({STRICT_THRESHOLD}%).")
                 
-                # 🚀 BEST ALTERNATIVE FIT ENGINE RUNNING IN THE BACKGROUND
+                # Active re-routing backup algorithm
                 best_alt_title = ""
                 best_alt_score = 0
                 
                 for job in GIVER_JOBS:
-                    # Skip the job the user already applied for and failed
                     if job["title"] == target_position:
                         continue
                     
@@ -163,9 +175,8 @@ if extracted_text:
                         best_alt_score = alt_score
                         best_alt_title = job["title"]
                 
-                # Check if the alternative match is high enough to suggest
                 if best_alt_score >= STRICT_THRESHOLD:
-                    st.info(f"✨ **AI Alternative Route Discovery:**\n\nWhile you didn't qualify for this specific role, your background has a high neural compatibility rating (**{best_alt_score}%**) for **{best_alt_title}**. We recommend redirecting your application there!")
+                    st.info(f"✨ **AI Alternative Route Discovery:**\n\nWhile you didn't qualify for this role, your background has high compatibility (**{best_alt_score}%**) for **{best_alt_title}**. We recommend switching your target track!")
                     
                     if HAS_GTTS:
                         tts_text = f"Application reviewed. We found a better match for you as a {best_alt_title}."
