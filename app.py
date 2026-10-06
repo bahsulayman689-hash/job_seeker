@@ -41,7 +41,7 @@ USE_DB = HAS_SUPABASE_LIB and "SUPABASE_URL" in st.secrets and "SUPABASE_KEY" in
 HAS_EMAIL = "SMTP_USER" in st.secrets and "SMTP_APP_PASSWORD" in st.secrets
 STATUSES = ["new", "shortlisted", "interview", "not selected"]
 
-st.set_page_config(page_title="AI Match Bridge", page_icon="🧠", layout="wide")
+st.set_page_config(page_title="AI Match Bridge", page_icon="🧠", layout="wide", initial_sidebar_state="expanded")
 
 # =====================================================================
 # STORAGE LAYER (Supabase if configured, otherwise in-memory demo mode)
@@ -68,12 +68,28 @@ def _mem():
     return st.session_state["mem"]
 
 
+def db_safe(default=None):
+    """Show a friendly message instead of crashing when the database cannot be reached."""
+    def deco(fn):
+        def wrapper(*a, **k):
+            try:
+                return fn(*a, **k)
+            except Exception as e:
+                st.error("Cannot reach the database. Check your internet connection and that "
+                         f"SUPABASE_URL is correct. Details: {type(e).__name__}: {e}")
+                return default
+        return wrapper
+    return deco
+
+
+@db_safe([])
 def get_jobs():
     if USE_DB:
         return sb().table("jobs").select("*").order("created_at", desc=True).execute().data
     return list(_mem()["jobs"])
 
 
+@db_safe(None)
 def add_job(title, description, skills, threshold, employer_email=""):
     row = {"title": title, "description": description, "skills": skills, "threshold": threshold}
     if employer_email:
@@ -86,6 +102,7 @@ def add_job(title, description, skills, threshold, employer_email=""):
         m["next_job"] += 1
 
 
+@db_safe(None)
 def delete_job(job_id):
     if USE_DB:
         sb().table("jobs").delete().eq("id", job_id).execute()
@@ -95,6 +112,7 @@ def delete_job(job_id):
         m["apps"] = [a for a in m["apps"] if a["job_id"] != job_id]
 
 
+@db_safe(None)
 def save_application(job_id, name, contact, score, found, missing):
     row = {"job_id": job_id, "name": name, "contact": contact, "score": score,
            "found": found, "missing": missing}
@@ -107,6 +125,7 @@ def save_application(job_id, name, contact, score, found, missing):
         m["next_app"] += 1
 
 
+@db_safe([])
 def get_applications(job_id):
     if USE_DB:
         return (sb().table("applications").select("*").eq("job_id", job_id)
@@ -115,12 +134,14 @@ def get_applications(job_id):
                   key=lambda a: a["score"], reverse=True)
 
 
+@db_safe([])
 def get_all_applications():
     if USE_DB:
         return sb().table("applications").select("*").order("score", desc=True).execute().data
     return sorted(_mem()["apps"], key=lambda a: a["score"], reverse=True)
 
 
+@db_safe(None)
 def update_status(app_id, status):
     if USE_DB:
         sb().table("applications").update({"status": status}).eq("id", app_id).execute()
@@ -138,7 +159,7 @@ def send_employer_email(to_email, job, name, contact, score, found, missing):
         return False, "No employer email set for this job."
     msg = EmailMessage()
     msg["Subject"] = f"New candidate for {job['title']}: {name} ({score}%)"
-    msg["From"] = st.secrets["SMTP_USER"]
+    msg["From"] = st.secrets["SMTP_USER"].strip()
     msg["To"] = to_email
     status = "Meets" if score >= job["threshold"] else "Below"
     msg.set_content(
@@ -150,14 +171,26 @@ def send_employer_email(to_email, job, name, contact, score, found, missing):
         f"Skills not found: {', '.join(missing) or 'none'}\n\n"
         "Open the Employer dashboard, then Ranked candidates, to review everyone.\n"
         "Scores are AI guidance only. Please review each candidate yourself.")
-    try:
-        ctx = ssl.create_default_context()
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=ctx, timeout=20) as server:
-            server.login(st.secrets["SMTP_USER"], st.secrets["SMTP_APP_PASSWORD"])
+    user = st.secrets["SMTP_USER"].strip()
+    pw = st.secrets["SMTP_APP_PASSWORD"].replace(" ", "").strip()
+    last_err = None
+    for method in ("ssl465", "starttls587"):
+        try:
+            ctx = ssl.create_default_context()
+            if method == "ssl465":
+                server = smtplib.SMTP_SSL("smtp.gmail.com", 465, context=ctx, timeout=20)
+            else:
+                server = smtplib.SMTP("smtp.gmail.com", 587, timeout=20)
+                server.starttls(context=ctx)
+            server.login(user, pw)
             server.send_message(msg)
-        return True, "Employer notified by email."
-    except Exception as e:
-        return False, f"Email failed: {e}"
+            server.quit()
+            return True, "Employer notified by email."
+        except smtplib.SMTPAuthenticationError:
+            return False, "Gmail rejected the login. Create a new App password and check SMTP_USER."
+        except Exception as e:
+            last_err = e
+    return False, f"Email failed: {last_err}"
 
 
 # =====================================================================
@@ -482,8 +515,36 @@ def employer_page():
 # NAVIGATION
 # =====================================================================
 with st.sidebar:
-    st.markdown("### 🧠 AI Match Bridge")
-    role = st.radio("I am a", ["Job seeker", "Employer"])
+    st.markdown("## 🧠 AI Match Bridge")
+    st.caption("Smarter hiring for job seekers and employers in The Gambia")
+
+    role = st.radio("I am a", ["Job seeker", "Employer"], horizontal=True)
+
+    with st.container(border=True):
+        st.markdown("**About this app**")
+        st.write("An AI platform that compares a candidate's experience with an employer's job "
+                 "profile and explains the result, instead of giving only a number.")
+
+    with st.expander("How it works"):
+        st.markdown(
+            "1. **Choose** a job you want\n"
+            "2. **Submit** a PDF resume, a voice note or typed text\n"
+            "3. **See** your match score, matched skills and missing skills\n"
+            "4. **Send** your result to the employer (optional)\n\n"
+            "Employers post jobs, set a threshold and review a ranked list of candidates.")
+
+    with st.expander("Technology"):
+        st.markdown(
+            "- Sentence embeddings (all-MiniLM-L6-v2)\n"
+            "- Skill coverage scoring\n"
+            "- Gemini API for speech to text\n"
+            "- Supabase (PostgreSQL) database\n"
+            "- Streamlit interface")
+
+    with st.expander("Privacy"):
+        st.write("Your resume text is never stored. Only your name, contact, score and skills are "
+                 "saved, and only if you tick the consent box. Scores are AI guidance, not hiring decisions.")
+
     with st.expander("⚙️ System health"):
         st.write(f"PDF parser: {'🟢' if HAS_PDF else '🔴'}")
         st.write(f"Audio (gTTS): {'🟢' if HAS_GTTS else '🔴'}")
@@ -493,6 +554,13 @@ with st.sidebar:
         st.write(f"Email alerts: {'🟢' if HAS_EMAIL else '🔴 Needs SMTP secrets'}")
         if st.session_state.get("last_email_error"):
             st.caption("Last email error: " + st.session_state["last_email_error"])
+
+    st.divider()
+    st.markdown("**Built by Sulayman Bah**")
+    st.caption("Machine learning developer, The Gambia")
+    st.link_button("GitHub", "https://github.com/bahsulayman689-hash/job_seeker", use_container_width=True)
+    st.link_button("LinkedIn", "https://linkedin.com/in/sulayman-bah-8a7096423", use_container_width=True)
+    st.caption("Version 1.0 | Educational and guidance use only")
 
 if role == "Job seeker":
     seeker_page()
