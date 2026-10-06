@@ -5,7 +5,7 @@ An AI-powered, frictionless career matchmaking network designed to solve youth u
 The system accepts raw inputs—via **PDF Resume upload** or **Live Voice Profiles**—transforms them into high-dimensional vector embeddings, and delivers an instantaneous, objective **Accepted** or **Rejected** hiring decision with an automated sound cue loop. If a seeker falls short of the target role, a background algorithm dynamically re-routes them to their **Best Alternative Fit**.
 
 ---
-
+## 🎀 Live demo is here https://jobseeker-bah-ai.streamlit.app/
 ## 🌐 System Architecture Flow
 
 - **Seeker Interfaces:** 📄 Upload PDF Resume OR 🎙️ Record Voice Note
