@@ -1,8 +1,10 @@
-streamlit
-PyPDF2
+streamlit>=1.40
+pandas
+pypdf
+fpdf2
 gTTS
-sentence-transformers
 google-genai
 supabase
-pandas
-torchvision
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch
+sentence-transformers
